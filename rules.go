@@ -73,22 +73,27 @@ func (sf ScanFlags) withReportFlags(sc ScanCallback) (i C.int) {
 // For every event emitted by libyara, the corresponding method on the
 // ScanCallback object is called.
 func (r *Rules) ScanMem(buf []byte, flags ScanFlags, timeout time.Duration, cb ScanCallback) (err error) {
-	var ptr *C.uint8_t
-	if len(buf) > 0 {
-		ptr = (*C.uint8_t)(unsafe.Pointer(&(buf[0])))
-	}
+	err = r.ScanMemAddr(uintptr(unsafe.Pointer(&(buf[0]))), len(buf), flags, timeout, cb)
+	runtime.KeepAlive(buf)
+	return
+}
+
+// ScanMemAddr scans an in-memory buffer using the ruleset.
+// For every event emitted by libyara, the corresponding method on the
+// ScanCallback object is called.
+func (r *Rules) ScanMemAddr(addr uintptr, length int, flags ScanFlags, timeout time.Duration, cb ScanCallback) (err error) {
+	ptr := (*C.uint8_t)(unsafe.Pointer(addr))
 	userData := cgoNewHandle(makeScanCallbackContainer(cb, r))
 	defer userData.Delete()
 	err = newError(C.yr_rules_scan_mem(
 		r.cptr,
 		ptr,
-		C.size_t(len(buf)),
+		C.size_t(length),
 		flags.withReportFlags(cb),
 		C.YR_CALLBACK_FUNC(C.scanCallbackFunc),
 		unsafe.Pointer(&userData),
 		C.int(timeout/time.Second)))
 	runtime.KeepAlive(r)
-	runtime.KeepAlive(buf)
 	return
 }
 
