@@ -82,9 +82,11 @@ func (r *Rules) ScanMem(buf []byte, flags ScanFlags, timeout time.Duration, cb S
 	return
 }
 
-// ScanMemAddr scans an in-memory buffer using the ruleset.
+// ScanMemAddr scans raw memory using the ruleset.
 // For every event emitted by libyara, the corresponding method on the
 // ScanCallback object is called.
+// NOTE: There are no checks regarding the address and length to scan!
+// It is up to the user to prevent segmentation faults.
 func (r *Rules) ScanMemAddr(addr uintptr, length int, flags ScanFlags, timeout time.Duration, cb ScanCallback) (err error) {
 	ptr := (*C.uint8_t)(unsafe.Pointer(addr))
 	userData := cgoNewHandle(makeScanCallbackContainer(cb, r))
