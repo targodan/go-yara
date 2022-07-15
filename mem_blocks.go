@@ -21,6 +21,7 @@ uint64_t memoryBlockIteratorFilesize(YR_MEMORY_BLOCK_ITERATOR*);
 import "C"
 import (
 	"reflect"
+	"runtime"
 	"unsafe"
 )
 
@@ -103,6 +104,16 @@ type MemoryBlock struct {
 	Size uint64
 	// FetchData is used to read size bytes into a byte slice
 	FetchData func([]byte)
+	// UseDirectMemoryAccess determines how memory is accessed.
+	// If it is false, the FetchData callback is used, resulting
+	// a copy of the buffer. If UseDirectMemoryAccess is true,
+	// FetchData is ignored and instead the memory at the address
+	// Base is accessed directly. This safes a copy but is less
+	// safe. In particular, this cannot be used to access objects
+	// in go-managed memory. Only use this for accessing unmanaged
+	// memory. If the address is invalid, this may result in a
+	// segmentation fault.
+	UseDirectMemoryAccess bool
 }
 
 // memoryBlockFetch is used as YR_MEMORY_BLOCK.fetch_data.
@@ -111,6 +122,12 @@ type MemoryBlock struct {
 //export memoryBlockFetch
 func memoryBlockFetch(cblock *C.YR_MEMORY_BLOCK) *C.uint8_t {
 	c := ((*cgoHandle)(cblock.context)).Value().(*memoryBlockIteratorContainer)
+
+	if c.UseDirectMemoryAccess {
+		c.realloc(int(cblock.size))
+		return (*C.uint8_t)(unsafe.Pointer(&c.buf[0]))
+	}
+
 	c.realloc(int(cblock.size))
 	c.MemoryBlock.FetchData(c.buf)
 	return (*C.uint8_t)(unsafe.Pointer(&c.buf[0]))
@@ -164,4 +181,31 @@ func memoryBlockIteratorNext(cmbi *C.YR_MEMORY_BLOCK_ITERATOR) *C.YR_MEMORY_BLOC
 func memoryBlockIteratorFilesize(cmbi *C.YR_MEMORY_BLOCK_ITERATOR) C.uint64_t {
 	c := ((*cgoHandle)(cmbi.context)).Value().(*memoryBlockIteratorContainer)
 	return C.uint64_t(c.MemoryBlockIterator.(MemoryBlockIteratorWithFilesize).Filesize())
+}
+
+// rawTestBlock represents an unmanaged memory block for testing purposes.
+type rawTestBlock struct {
+	ptr    unsafe.Pointer
+	length uint64
+}
+
+func (b *rawTestBlock) free() {
+	C.free(b.ptr)
+}
+
+func newRawTestBlock(data []byte) *rawTestBlock {
+	var ptr unsafe.Pointer
+	if len(data) > 0 {
+		ptr = C.malloc(C.size_t(len(data)))
+		C.memcpy(ptr, unsafe.Pointer(&data[0]), C.size_t(len(data)))
+	}
+
+	b := &rawTestBlock{
+		ptr:    ptr,
+		length: uint64(len(data)),
+	}
+
+	runtime.SetFinalizer(b, (*rawTestBlock).free)
+
+	return b
 }

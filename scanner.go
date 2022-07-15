@@ -145,20 +145,33 @@ func (s *Scanner) putCallbackData() {
 // ScanMem scans an in-memory buffer using the scanner.
 //
 // If no callback object has been set for the scanner using
-// SetCAllback, it is initialized with an empty MatchRules object.
+// SetCallback, it is initialized with an empty MatchRules object.
 func (s *Scanner) ScanMem(buf []byte) (err error) {
-	var ptr *C.uint8_t
+	var ptr unsafe.Pointer
 	if len(buf) > 0 {
-		ptr = (*C.uint8_t)(unsafe.Pointer(&(buf[0])))
+		ptr = unsafe.Pointer(&(buf[0]))
 	}
+	err = s.ScanRawMem(uintptr(ptr), uint64(len(buf)))
+	runtime.KeepAlive(buf)
+	return
+}
+
+// ScanRawMem scans raw memory using the scanner.
+//
+// If no callback object has been set for the scanner using
+// SetCallback, it is initialized with an empty MatchRules object.
+//
+// NOTE: There are no checks regarding the address and length to scan!
+// It is up to the user to prevent segmentation faults.
+func (s *Scanner) ScanRawMem(addr uintptr, length uint64) (err error) {
+	ptr := (*C.uint8_t)(unsafe.Pointer(addr))
 	s.putCallbackData()
 	C.yr_scanner_set_flags(s.cptr, s.flags.withReportFlags(s.Callback))
 	err = newError(C.yr_scanner_scan_mem(
 		s.cptr,
 		ptr,
-		C.size_t(len(buf))))
+		C.size_t(length)))
 	runtime.KeepAlive(s)
-	runtime.KeepAlive(buf)
 	return
 }
 

@@ -77,17 +77,17 @@ func (r *Rules) ScanMem(buf []byte, flags ScanFlags, timeout time.Duration, cb S
 	if len(buf) > 0 {
 		ptr = unsafe.Pointer(&(buf[0]))
 	}
-	err = r.ScanMemAddr(uintptr(ptr), len(buf), flags, timeout, cb)
+	err = r.ScanRawMem(uintptr(ptr), uint64(len(buf)), flags, timeout, cb)
 	runtime.KeepAlive(buf)
 	return
 }
 
-// ScanMemAddr scans raw memory using the ruleset.
+// ScanRawMem scans raw memory using the ruleset.
 // For every event emitted by libyara, the corresponding method on the
 // ScanCallback object is called.
 // NOTE: There are no checks regarding the address and length to scan!
 // It is up to the user to prevent segmentation faults.
-func (r *Rules) ScanMemAddr(addr uintptr, length int, flags ScanFlags, timeout time.Duration, cb ScanCallback) (err error) {
+func (r *Rules) ScanRawMem(addr uintptr, length uint64, flags ScanFlags, timeout time.Duration, cb ScanCallback) (err error) {
 	ptr := (*C.uint8_t)(unsafe.Pointer(addr))
 	userData := cgoNewHandle(makeScanCallbackContainer(cb, r))
 	defer userData.Delete()
